@@ -12,6 +12,10 @@ import com.flash_seckill.service.ISeckillProductService;
 import com.flash_seckill.utils.UniqueId;
 import com.flash_seckill.pojo.vo.OrderDetailVO;
 import com.flash_seckill.pojo.vo.OrderListVO;
+import com.rabbitmq.client.MessageProperties;
+import org.springframework.amqp.core.Correlation;
+import org.springframework.amqp.core.MessageDeliveryMode;
+import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
@@ -24,6 +28,10 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+
+import static com.flash_seckill.config.RabbitMqConfig.ORDER_CREATE_EXCHANGE;
+import static com.flash_seckill.config.RabbitMqConfig.ORDER_CREATE_ROUTING_KEY;
 
 @Slf4j
 @Service
@@ -51,6 +59,7 @@ public class SeckillProductOrderServiceImpl extends ServiceImpl<SeckillProductOr
     // 创建订单
     @Override
     public Long createOrder(Long productId) {
+        // 1. 查询商品信息
         SeckillProduct product = seckillProductService.getById(productId);
         // 检查商品是否存在
         if (product == null) {
@@ -62,26 +71,26 @@ public class SeckillProductOrderServiceImpl extends ServiceImpl<SeckillProductOr
         }
         // 获取用户ID
         Long userId = (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        // 执行脚本
+        // 执行脚本（传入商品id和用户id）
         Long result = stringRedisTemplate.execute(SECKILL_SCRIPT,
                 Collections.emptyList(),
                 productId.toString(),
                 userId.toString());
-        // 获取结果
+
+        // 2. 获取结果
         int r = result.intValue();
         if (r != 0) {
-            // 秒杀失败
             if (r == 1) {
-                // 库存不足
+                // 2.1 库存不足
                 throw new BusinessException(ErrorCode.PRODUCT_STOCK_NOT_ENOUGH);
             }
             if (r == 2) {
-                // 重复秒杀
+                // 2.2 重复秒杀
                 throw new BusinessException(ErrorCode.ORDER_REPEAT_SECKILL);
             }
         }
 
-        // 有购买资格 创建订单ID 
+        // 3. 有购买资格 生成订单ID
         Long orderId = uniqueId.nextId("order");
         // 创建订单
         SeckillProductOrder order = new SeckillProductOrder();
@@ -91,9 +100,21 @@ public class SeckillProductOrderServiceImpl extends ServiceImpl<SeckillProductOr
         order.setSeckillProductId(productId);
         order.setCreateTime(LocalDateTime.now());
 
-        rabbitTemplate.convertAndSend("order.direct", "order.create", order);
-
-        // 返回订单ID
+        // 4. 异步发送消息（消费者可靠性）
+        // 4.1 创建CorrelationData对象，设置消息类型和订单ID，用于发送失败后人工干预
+        CorrelationData correlationData = new CorrelationData("CREATE_" + orderId);
+        // 4.2 发送消息
+        rabbitTemplate.convertAndSend(
+                ORDER_CREATE_EXCHANGE,      // 交换机
+                ORDER_CREATE_ROUTING_KEY,   // 路由键
+                order,
+                msg -> {
+                    // 设置消息持久化
+                    msg.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
+                    return msg;},
+                correlationData              // 订单id
+        );
+        // 5. 返回订单ID
         return orderId;
     }
 

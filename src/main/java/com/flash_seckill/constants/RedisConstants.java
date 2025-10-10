@@ -16,4 +16,6 @@ public class RedisConstants {
     public static final String PRODUCT_COLLECT_KEY = "product:collect:";
     // 商品库存
     public static final String PRODUCT_STOCK_KEY = "product:stock:";
+    // 商品下单用户set
+    public static final String PRODUCT_USER_KEY = "product:user:";
 }

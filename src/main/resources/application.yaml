@@ -38,6 +38,15 @@ spring:
     virtual-host: seckill
     username: rabbit
     password: 123456
+    publisher-confirm-type: correlated   # 启用发布确认
+    publisher-returns: false             # 路由失败后，不返回消息
+    listener:
+      simple:
+        acknowledge-mode: auto           # 自动确认
+        retry:
+          enabled: true
+          max-attempts: 3                # 本地重试 3 次
+          initial-interval: 2000         # 初始重试时间间隔 2秒
 
   # 定时任务配置
   task:
