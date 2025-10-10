@@ -1,0 +1,73 @@
+# ===========================================
+# 服务器配置
+# ===========================================
+server:
+  port: 8081
+
+# ===========================================
+# Spring应用配置
+# ===========================================
+spring:
+  # 应用基本信息
+  application:
+    name: flash_seckill
+
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/seckill_system?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: root
+    password: 123456
+
+  # Redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 123456
+      lettuce:
+        pool:
+          max-active: 10      # 连接池最大连接数
+          max-idle: 10        # 连接池最大空闲连接数
+          min-idle: 1         # 连接池最小空闲连接数
+
+  # RabbitMQ消息队列配置
+  rabbitmq:
+    host: localhost
+    port: 5672
+    virtual-host: seckill
+    username: rabbit
+    password: 123456
+
+  # 定时任务配置
+  task:
+    scheduling:
+      enabled: true          # 启用定时任务
+      pool:
+        size: 10             # 定时任务线程池大小
+
+  # 事务管理配置
+  transaction:
+    rollback-on-commit-failure: true  # 提交失败时回滚
+
+# ===========================================
+# MyBatis-Plus配置
+# ===========================================
+mybatis-plus:
+  type-aliases-package: com.flash_seckill.entity  # 实体类包路径
+  configuration:
+    map-underscore-to-camel-case: true  # 开启下划线转驼峰命名
+
+# ===========================================
+# JWT认证配置
+# ===========================================
+jwt:
+  secret: mySecretKey12345678901234567890123456789012  # JWT密钥(32字节)
+  expiration: 999999  # 令牌过期时间(秒)
+
+# ===========================================
+# 日志配置
+# ===========================================
+logging:
+  level:
+    com.flash_seckill: debug  # 项目包日志级别
