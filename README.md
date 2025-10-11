@@ -22,6 +22,7 @@ Flash Seckill 是一个基于 Spring Boot 3.2.0 的高性能秒杀系统，采�
 - 消息队列异步处理订单
 - JWT无状态认证
 - canal监听binlog日志实现数据一致性
+- 定时任务结合redssion实现商品热度排行榜
 
 ## 项目结构
 
@@ -33,6 +34,7 @@ flash_seckill/
 │   ├── mapper/              # 数据访问层
 │   ├── pojo/                # 数据传输对象
 │   ├── utils/               # 工具类
+|   ├── rabbitmq/            # 消息类
 │   ├── config/              # 配置类
 │   └── exception/           # 异常处理
 ├── src/main/resources/
@@ -42,6 +44,50 @@ flash_seckill/
 │   └── create_tables.sql    # 数据库表结构
 └── pom.xml                  # Maven依赖配置
 ```
+
+## 核心功能实现
+
+### 1. redis + lua库存扣减
+使用Redis Lua脚本实现原子性的库存扣减操作，防止超卖：
+
+```lua
+-- seckill.lua
+if redis.call('exists', KEYS[1]) == 1 then
+    local stock = tonumber(redis.call('get', KEYS[1]))
+    if stock <= 0 then
+        return -1
+    end
+    if stock > 0 then
+        redis.call('decr', KEYS[1])
+        return stock - 1
+    end
+end
+return -1
+```
+
+### 2. 缓存优化
+- Redis缓存商品信息
+- Redis有序集合实现商品排行榜
+
+### 3. 消息队列异步处理
+使用RabbitMQ实现订单的异步处理，提高系统吞吐量：
+
+- **订单创建队列**: 处理秒杀成功的订单
+- **订单超时队列**: 处理未支付的超时订单
+
+### 4. 安全认证
+- JWT无状态认证
+- Spring Security权限控制
+- 密码加密存储
+
+### 5. 数据一致性
+- 使用Canal监听MySQL的binlog日志，发送至消息队列
+- 在数据库发生更新或删除操作后，及时清除对应的Redis缓存
+
+### 6. 商品排行
+- Spring Scheduler定时任务结合Redis ZSet设计商品热度排行榜
+- Redisson分布式锁，确保在多实例部署环境下，定时任务仅被单节点执行
+
 
 ## 快速开始
 
@@ -205,98 +251,7 @@ mvn spring-boot:run
 
 3. 访问地址：http://localhost:8081
 
-## API接口文档
 
-### 认证接口
 
-#### 用户登录
-- **URL**: `POST /api/auth/login`
-- **参数**:
-```json
-{
-  "username": "string",
-  "password": "string"
-}
-```
-- **响应**:
-```json
-{
-  "code": 200,
-  "message": "success",
-  "data": {
-    "token": "jwt_token",
-    "username": "string"
-  }
-}
-```
-
-#### 用户注册
-- **URL**: `POST /api/auth/register`
-- **参数**: 同登录接口
-- **响应**: 注册成功信息
-
-### 商品接口
-
-#### 获取商品列表
-- **URL**: `GET /api/product/list`
-- **认证**: 需要JWT令牌
-- **响应**: 商品列表信息
-
-#### 获取商品详情
-- **URL**: `GET /api/product/{id}`
-- **认证**: 需要JWT令牌
-- **响应**: 商品详细信息
-
-#### 获取商品排行榜
-- **URL**: `GET /api/product/rank`
-- **认证**: 需要JWT令牌
-- **响应**: 热门商品排行榜
-
-### 秒杀接口
-
-#### 秒杀下单
-- **URL**: `POST /api/seckill/{productId}`
-- **认证**: 需要JWT令牌
-- **响应**: 下单结果
-
-#### 查询订单状态
-- **URL**: `GET /api/order/{orderId}`
-- **认证**: 需要JWT令牌
-- **响应**: 订单状态信息
-
-## 核心功能实现
-
-### 1. redis + lua库存扣减
-使用Redis Lua脚本实现原子性的库存扣减操作，防止超卖：
-
-```lua
--- seckill.lua
-if redis.call('exists', KEYS[1]) == 1 then
-    local stock = tonumber(redis.call('get', KEYS[1]))
-    if stock <= 0 then
-        return -1
-    end
-    if stock > 0 then
-        redis.call('decr', KEYS[1])
-        return stock - 1
-    end
-end
-return -1
-```
-
-### 2. 消息队列异步处理
-使用RabbitMQ实现订单的异步处理，提高系统吞吐量：
-
-- **订单创建队列**: 处理秒杀成功的订单
-- **订单超时队列**: 处理未支付的超时订单
-
-### 3. 缓存优化
-- Redis缓存商品信息
-- Redis有序集合实现商品排行榜
-
-### 4. 安全认证
-- JWT无状态认证
-- Spring Security权限控制
-- 密码加密存储
 
 **注意**: 本系统为学习演示用途，生产环境使用前请进行充分测试和安全评估。

@@ -62,4 +62,7 @@ public class TimedTask {
         }
     }
 
+    // todo 定时清除库存为0的商品的用户限购
+    // todo 每天清除商品热度
+    // todo 秒杀开始前 5 分钟，将商品库存加载到 Redis
 }
