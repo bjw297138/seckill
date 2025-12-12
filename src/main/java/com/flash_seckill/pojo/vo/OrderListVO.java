@@ -15,4 +15,5 @@ public class OrderListVO {
     private String productName;
     private String img;
     private Integer price;
+    //
 }
